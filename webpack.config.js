@@ -1,3 +1,23 @@
+const browserJs = {
+  entry: {
+    app: './app.jsx'
+  },
+  resolve: { 
+    extensions: ['.js', '.jsx']
+  },
+  module: {
+    rules: [
+      {
+        test: /\.(js|jsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader'
+        }
+      }
+    ]
+  }
+}
+
 const handler = {
   entry: {
     handler: './handler.js' 
@@ -27,5 +47,6 @@ const handler = {
 };
 
 module.exports = [
+  browserJs,
   handler
 ];
