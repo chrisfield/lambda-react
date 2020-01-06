@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Creates a bucket with a trigger that runs a lambda.
+Parameters:
+  chromeAwsLambdaLayerBucketName:
+    Type: String
+    Default: 'lambda-react-code-bucket'
+  bucketName:
+    Type: String
+    Default: 'lambda-react-bucket'
+Resources:
+
+  ChromeAwsLambdaLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - nodejs8.10
+        - nodejs10.x
+      Content:
+        S3Bucket: !Ref chromeAwsLambdaLayerBucketName
+        S3Key: chrome-aws-lambda-layer.zip
+
+  ReactLambdaBucket:
+    Type: AWS::S3::Bucket
+    DependsOn:
+      - RenderAndUploadPermission
+    Properties:
+      BucketName: !Ref bucketName
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt RenderAndUpload.Arn
+            Filter:
+              S3Key:
+                Rules:
+                - Name: suffix
+                  Value: .json
+
+  RenderAndUploadPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref RenderAndUpload
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub 'arn:aws:s3:::${bucketName}'
+      SourceAccount: !Ref AWS::AccountId
+
+  RenderAndUploadExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:*
+            Resource: arn:aws:logs:*:*:*          
+          - Effect: Allow
+            Action:
+            - s3:List*
+            - s3:Get*
+            - s3:Put*
+            Resource: !Sub 'arn:aws:s3:::${bucketName}/*'          
+
+  RenderAndUpload:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handler.renderAndUpload
+      Runtime: nodejs8.10
+      CodeUri: ./dist/handler.js
+      Description: Upload output rendered by React
+      Role: !GetAtt RenderAndUploadExecutionRole.Arn
+      Layers:
+        - !Ref ChromeAwsLambdaLayer
+      MemorySize: 512
+      Timeout: 10
+      Environment:
+        Variables:
+          UPLOAD_BUCKET: !Ref bucketName
